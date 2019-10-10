@@ -15,6 +15,7 @@ from deep_bcr import *
 ## Helper Functions for Basic Staffs
 
 def read_fa_seq(fa_file):
+    # '产量序列'指什么
     """ Read fastq file and yield sequences"""
     with open(fa_file) as tmp:
         s = ''
@@ -22,13 +23,16 @@ def read_fa_seq(fa_file):
             if line.startswith('>'):
                 yield s
             else:
+                #strip() 方法用于移除字符串头尾指定的字符（默认为空格或换行符）或字符序列。只能是头尾
                 s += line.strip()
         yield s
 
 def read_meta(meta_file='../data/TCGA/tcga_clinical_CC.csv'):
     """ Return the clinical information indexed by patient ids"""
+    # 看不到这个CSV到底是什么样的格式
     meta = pd.read_csv(meta_file)
     print(list(meta))
+    # pandas 内置的方法，将索引为patient的列保存到字典对象中
     return meta.set_index('patient').T.to_dict()
 
 
@@ -37,7 +41,7 @@ def load_data(meta, case, ratio=0.5,
               datapath='../data/',
               IGH_tab='../data/TCGA/tcga_bcrh_v20180405.txt.gz',
               IGL_tab='../data/TCGA/tcga_bcrl_v20190102.txt.gz'):
-
+    # 加载神经网络相关的数据
     info = os.path.join(datapath, case+'_info.csv')
     train = os.path.join(datapath, case+'_train.pkl.gz')
     test = os.path.join(datapath, case+'_test.pkl.gz')
@@ -45,7 +49,7 @@ def load_data(meta, case, ratio=0.5,
     if os.path.exists(info) and os.path.exists(train) and os.path.exists(test):
         return pd.read_csv(info), pd.read_pickle(train), pd.read_pickle(test)
 
-    ## Annotate light chain isotypes
+    ## Annotate light chain isotypes 
     trust_tab = pd.read_csv(IGL_tab, sep='\t')
     for light in ['IGK','IGL']:
         for gene in ['Cgene','Jgene','Vgene']:
