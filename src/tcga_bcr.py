@@ -15,6 +15,7 @@ from deep_bcr import *
 ## Helper Functions for Basic Staffs
 
 def read_fa_seq(fa_file):
+    # '产量序列'指什么
     """ Read fastq file and yield sequences"""
     with open(fa_file) as tmp:
         s = ''
@@ -22,13 +23,16 @@ def read_fa_seq(fa_file):
             if line.startswith('>'):
                 yield s
             else:
+                #strip() 方法用于移除字符串头尾指定的字符（默认为空格或换行符）或字符序列。只能是头尾
                 s += line.strip()
         yield s
 
 def read_meta(meta_file='../data/TCGA/tcga_clinical_CC.csv'):
     """ Return the clinical information indexed by patient ids"""
+    # 看不到这个CSV到底是什么样的格式
     meta = pd.read_csv(meta_file)
     print(list(meta))
+    # pandas 内置的方法，将索引为patient的列保存到字典对象中
     return meta.set_index('patient').T.to_dict()
 
 
@@ -37,7 +41,7 @@ def load_data(meta, case, ratio=0.5,
               datapath='../data/',
               IGH_tab='../data/TCGA/tcga_bcrh_v20180405.txt.gz',
               IGL_tab='../data/TCGA/tcga_bcrl_v20190102.txt.gz'):
-
+    # 加载神经网络相关的数据
     info = os.path.join(datapath, case+'_info.csv')
     train = os.path.join(datapath, case+'_train.pkl.gz')
     test = os.path.join(datapath, case+'_test.pkl.gz')
@@ -45,7 +49,7 @@ def load_data(meta, case, ratio=0.5,
     if os.path.exists(info) and os.path.exists(train) and os.path.exists(test):
         return pd.read_csv(info), pd.read_pickle(train), pd.read_pickle(test)
 
-    ## Annotate light chain isotypes
+    ## Annotate light chain isotypes 
     trust_tab = pd.read_csv(IGL_tab, sep='\t')
     for light in ['IGK','IGL']:
         for gene in ['Cgene','Jgene','Vgene']:
@@ -135,27 +139,50 @@ AA_CHEM = {'A':[-0.591, -1.302, -0.733, 1.57, -0.146],
            'W':[-0.595, 0.009, 0.672, -2.128, -0.184],
            'Y':[0.26, 0.83, 3.097, -0.838, 1.512]}
 
+# 我自己进行了测试 ，用了一个6个氨基酸的短肽
+# seq = ["C","E","M","M","S","T"]
 def encode_aa_seq_index(seq):
     """ Encode an amino acid sequence by its indexes """
+    # 找出氨基酸所在的位置
     return [AA_LIST.index(i) if i in AA_LIST else 0 for i in seq]
+'''
+[1, 3, 10, 10, 15, 16]
+'''
 
 def encode_aa_seq_binary(seq):
+    # 转化为二进制的向量，已经确认one--hot 编码
     """ Encode an amino acid sequence into a binary vector """
     length = len(AA_LIST)
     values = np.zeros(length*len(seq), dtype='float')
     for index, aa in enumerate(seq):
         if aa not in AA_LIST:
             continue ## all zeros
+            # 核心功能
         values[length*index + AA_LIST.index(aa)] = 1.0
     return values
-
+'''
+len = 120
+[0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1.
+ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+ 0. 0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0.
+ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1.
+ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0. 0. 0.]
+'''
 def encode_aa_seq_binary_ext_dim(seq):
+    # 重新划分了维度，将每20个划分到以为，有n个氨基酸就有n维
     """ Encode the amino acid into an extrat dimension """
     v = encode_aa_seq_binary(seq)
     i = len(seq)
     j = len(v)//i
     return v.reshape((i,j))
-
+'''
+[[0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0. 0. 0. 0.]
+ [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0. 0. 0.]]
+'''
 def encode_aa_seq_atchley(seq):
     """ Encode an amino acid sequence into a vector of atchley factors """
     length = len(AA_CHEM)
@@ -163,16 +190,22 @@ def encode_aa_seq_atchley(seq):
     for index, aa in enumerate(seq):
         values += AA_CHEM.get(aa, [0.0, 0.0, 0.0, 0.0, 0.0])
     return values
+# [-1.343, 0.465, -0.862, -1.02, -0.255, 1.357, -1.453, 1.477, 0.113, -0.837, -0.663, -1.524, 2.219, -1.005, 1.212, -0.663, -1.524, 2.219, -1.005, 1.212, -0.228, 1.399, -4.76, 0.67, -2.647, -0.032, 0.326, 2.213, 0.908, 1.313]
+# len = 30
+# 30 = 5x6
+
 
 
 ###############################################################################
 ## Helper Functions for Preparing the Input Data for Further Formatting
 
 def to_list(df):
+    # shape是numpy的属性
     if len(df.shape) == 1:
         return df.tolist()
     else:
         return [tuple(x) for x in df.values]
+    # .values 是python中字典的写法
 
 def extract_bcr(tab, rep_col='CDR3_aa'):
     """ Extract BCR repertorie for each patient 
@@ -209,6 +242,7 @@ def extract_bcr(tab, rep_col='CDR3_aa'):
 
     print('Tumor data of shape', tumor.shape)
     print('Normal data of shape', normal.shape)
+    # 对数据集进行分组,并且应用了to——list函数
     out = [ tumor.groupby('patient')[rep_col].apply(to_list), 
            normal.groupby('patient')[rep_col].apply(to_list) ]
     return pd.concat(out)
